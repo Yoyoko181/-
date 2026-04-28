@@ -5,3 +5,6 @@ model_train/results/
 model_train/**/cwt_images/
 *.pth
 thesis/
+model_train/footstep_feat.mat
+*.mat
+
