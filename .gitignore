@@ -1,0 +1,7 @@
+model_train/.venv/
+.venv/
+**/__pycache__/
+model_train/results/
+model_train/**/cwt_images/
+*.pth
+thesis/
