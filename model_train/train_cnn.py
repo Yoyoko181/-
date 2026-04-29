@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 # === Configuration ===
 DATA_DIR = r'e:\毕设\Terra-main\model_train\cwt_images'
 BATCH_SIZE = 32
-NUM_EPOCHS = 20
+NUM_EPOCHS = 200
 LEARNING_RATE = 0.001
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 USE_PRETRAINED = False
