@@ -3,9 +3,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FOOT_DB_ROOT="${FOOT_DB_ROOT:-/root/毕设/Foot_database}"
-DATASET="${DATASET:-A3}"
-TRAIN_SUBSETS="${TRAIN_SUBSETS:-A3_1,A3_3}"
-TEST_SUBSET="${TEST_SUBSET:-A3_2}"
+DATASET="${DATASET:-A5}"
+TRAIN_SUBSETS="${TRAIN_SUBSETS:-A5_2}"
+TEST_SUBSET="${TEST_SUBSET:-A5_1}"
 BATCH_SIZE="${BATCH_SIZE:-32}"
 LR="${LR:-1e-3}"
 SEED="${SEED:-42}"
@@ -34,5 +34,5 @@ if [[ "$SKIP_GENERATE" == "1" ]]; then
   ARGS+=(--skip_generate)
 fi
 
-python3 "$SCRIPT_DIR/train_cross_material.py" "${ARGS[@]}"
+python3 "$SCRIPT_DIR/train_cross_speed.py" "${ARGS[@]}"
 

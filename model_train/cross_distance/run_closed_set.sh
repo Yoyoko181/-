@@ -35,3 +35,4 @@ if [[ "$SKIP_GENERATE" == "1" ]]; then
 fi
 
 python3 "$SCRIPT_DIR/train_cross_distance.py" "${ARGS[@]}"
+
