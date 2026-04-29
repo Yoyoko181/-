@@ -15,7 +15,7 @@ USE_PRETRAINED="${USE_PRETRAINED:-0}"
 SKIP_GENERATE="${SKIP_GENERATE:-0}"
 NOISE_SNR_DB="${NOISE_SNR_DB:-10}"
 STRUCT_NOISE_ROOT="${STRUCT_NOISE_ROOT:-}"
-NONSTRUCT_NOISE="${NONSTRUCT_NOISE:-gaussian}"
+NONSTRUCT_NOISE="${NONSTRUCT_NOISE:-gaussian+impulse}"
 
 ARGS=(
   --foot_db_root "$FOOT_DB_ROOT"
@@ -44,4 +44,3 @@ if [[ "$SKIP_GENERATE" == "1" ]]; then
 fi
 
 python3 "$SCRIPT_DIR/train_noise_robustness.py" "${ARGS[@]}"
-

@@ -462,7 +462,7 @@ def main() -> None:
     parser.add_argument("--noise_snr_db", type=float, default=10.0)
     parser.add_argument("--struct_noise_root", type=str, default="")
     parser.add_argument("--struct_noise_glob", type=str, default="**/*.mat")
-    parser.add_argument("--nonstruct_noise", type=str, default="gaussian")
+    parser.add_argument("--nonstruct_noise", type=str, default="gaussian+impulse")
     parser.add_argument("--impulse_prob", type=float, default=0.002)
     parser.add_argument("--impulse_amp", type=float, default=8.0)
     args = parser.parse_args()
@@ -715,4 +715,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
