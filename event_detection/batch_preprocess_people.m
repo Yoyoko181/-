@@ -161,6 +161,9 @@ for k = 1:numel(persons)
     prdct_clst(id, :) = 0;
     Evnt_Prdctd = [Evnt_Ind, prdct_clst];
     [~, footstep_feat] = Event_Extract(Evnt_Prdctd, geo_data, sigma, k);
+    if isempty(footstep_feat)
+        continue;
+    end
     out_fp = fullfile(subset_out, sprintf("%s.mat", persons(k)));
     save(out_fp, "footstep_feat");
 end

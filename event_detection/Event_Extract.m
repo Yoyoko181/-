@@ -7,6 +7,7 @@ tm = (0:length(signal)-1)/fs;
 
 new_sig = zeros(size(signal,1),1);
 Event_loc = zeros(size(signal,1),1);
+Features = [];
 
 
 
@@ -19,6 +20,9 @@ Sig = zeros(1,footfall_len);
 k= 1:footfall_len;
 % sigma = 2.5;
 % figure()
+if isempty(Detctd_Evnt_idx) || length(Detctd_Evnt_idx) < 2
+    return;
+end
 while j < length(Detctd_Evnt_idx)
     
     fprintf('\n================= Person %d and Event %d =================\n',prsn, iter )
@@ -73,4 +77,3 @@ end
 
 
 end
-
