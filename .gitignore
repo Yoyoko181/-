@@ -3,6 +3,7 @@ model_train/.venv/
 **/__pycache__/
 model_train/results/
 model_train/**/cwt_images/
+people_database/
 *.pth
 thesis/
 model_train/footstep_feat.mat
