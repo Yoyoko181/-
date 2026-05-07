@@ -1,8 +1,19 @@
-function batch_preprocess_people()
+function batch_preprocess_people(start_dataset)
+if nargin < 1 || strlength(string(start_dataset)) == 0
+    start_dataset = "A1";
+else
+    start_dataset = string(start_dataset);
+end
 foot_db_root = "E:\毕设\Foot_database";
 out_root = "E:\毕设\Terra-main\people_database\interim_matlab";
 datasets = ["A1","A2","A3","A4","A5"];
-for d = 1:numel(datasets)
+
+start_idx = find(datasets == start_dataset, 1);
+if isempty(start_idx)
+    error("start_dataset 必须是 [%s] 之一，当前=%s", strjoin(datasets, ","), start_dataset);
+end
+
+for d = start_idx:numel(datasets)
     ds = datasets(d);
     subsets = local_subsets(ds);
     for s = 1:numel(subsets)
