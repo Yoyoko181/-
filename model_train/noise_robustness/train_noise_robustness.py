@@ -17,7 +17,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from PIL import Image
+import json
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
 from torch.utils.data import DataLoader, Dataset
 from torchvision import models, transforms
 from torchvision.models import ResNet18_Weights
@@ -424,6 +426,52 @@ def _evaluate(model: nn.Module, loader: DataLoader) -> float:
     return correct / total if total else 0.0
 
 
+def _predict(model: nn.Module, loader: DataLoader) -> tuple[list[int], list[int], float]:
+    model.eval()
+    y_true: list[int] = []
+    y_pred: list[int] = []
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for images, labels in loader:
+            images, labels = images.to(DEVICE), labels.to(DEVICE)
+            outputs = model(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+            y_true.extend(labels.detach().cpu().numpy().astype(int).tolist())
+            y_pred.extend(predicted.detach().cpu().numpy().astype(int).tolist())
+    acc = correct / total if total else 0.0
+    return y_true, y_pred, float(acc)
+
+
+def _save_confusion_matrix(
+    y_true: list[int],
+    y_pred: list[int],
+    *,
+    num_classes: int,
+    class_names: list[str],
+    out_path: Path,
+) -> None:
+    cmx = confusion_matrix(y_true, y_pred, labels=list(range(num_classes)))
+    denom = cmx.sum(axis=1, keepdims=True)
+    denom = np.where(denom == 0, 1, denom)
+    cmn = cmx.astype(np.float32) / denom.astype(np.float32)
+    plt.figure(figsize=(10, 8))
+    plt.imshow(cmn, interpolation="nearest", cmap="Blues")
+    plt.title("Confusion Matrix (Normalized)")
+    plt.colorbar(fraction=0.046, pad=0.04)
+    if num_classes <= 30:
+        ticks = np.arange(num_classes)
+        plt.xticks(ticks, class_names, rotation=90, fontsize=6)
+        plt.yticks(ticks, class_names, fontsize=6)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.tight_layout()
+    plt.savefig(str(out_path))
+    plt.close()
+
+
 def _snr_suffix(snr_db: float) -> str:
     if not np.isfinite(snr_db):
         return "snrNaN"
@@ -692,7 +740,7 @@ def main() -> None:
             state_dict = torch.load(str(best_model_path), map_location=DEVICE)
         model.load_state_dict(state_dict)
 
-    test_acc = _evaluate(model, test_loader)
+    y_true_test, y_pred_test, test_acc = _predict(model, test_loader)
 
     plt.figure(figsize=(12, 4))
     plt.subplot(1, 2, 1)
@@ -701,16 +749,62 @@ def main() -> None:
     plt.legend()
     plt.subplot(1, 2, 2)
     plt.plot(history["val_acc"], label="Val Acc")
+    plt.axhline(test_acc, linestyle="--", linewidth=1.5, label=f"Test Acc: {test_acc:.4f}")
     plt.title("Validation Accuracy")
     plt.legend()
     history_path = results_dir / "training_history.png"
     plt.savefig(str(history_path))
     plt.close()
 
+    cm_path = results_dir / "confusion_matrix_test.png"
+    _save_confusion_matrix(
+        y_true_test,
+        y_pred_test,
+        num_classes=num_classes,
+        class_names=common_classes,
+        out_path=cm_path,
+    )
+
+    metrics = {
+        "task": "noise_robustness",
+        "device": str(DEVICE),
+        "dataset": args.dataset,
+        "train_subsets": train_subsets,
+        "test_subset_clean": test_subset,
+        "test_out_subset": test_out_subset,
+        "train_roots": [str(p) for p in train_roots],
+        "test_root": str(test_root),
+        "num_classes": int(num_classes),
+        "num_train_images": int(len(train_dataset)),
+        "num_val_images": int(len(val_dataset)),
+        "num_test_images": int(len(test_dataset)),
+        "epochs": int(args.epochs),
+        "batch_size": int(args.batch_size),
+        "lr": float(args.lr),
+        "seed": int(args.seed),
+        "use_pretrained": bool(args.use_pretrained),
+        "mode": str(args.mode),
+        "segment_len": int(args.segment_len),
+        "segments_per_file": int(args.segments_per_file),
+        "noise_snr_db": float(args.noise_snr_db),
+        "nonstruct_noise": str(args.nonstruct_noise),
+        "struct_noise_root": str(args.struct_noise_root),
+        "best_val_acc": float(best_val_acc),
+        "test_acc": float(test_acc),
+        "best_model_path": str(best_model_path),
+        "training_history_path": str(history_path),
+        "confusion_matrix_test_path": str(cm_path),
+    }
+    metrics_path = results_dir / "metrics.json"
+    with metrics_path.open("w", encoding="utf-8") as f:
+        json.dump(metrics, f, ensure_ascii=False, indent=2)
+
     print(f"Best Val Acc: {best_val_acc:.4f}", flush=True)
     print(f"Test Acc (Noise Robustness): {test_acc:.4f}", flush=True)
     print(f"Saved: {best_model_path}", flush=True)
     print(f"Saved: {history_path}", flush=True)
+    print(f"Saved: {metrics_path}", flush=True)
+    print(f"Saved: {cm_path}", flush=True)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ model_train/results/
 model_train/**/cwt_images/
 people_database/
 *.pth
+*.patch
 thesis/
 model_train/footstep_feat.mat
 *.mat
-

@@ -10,6 +10,9 @@ import os
 import glob
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
+import json
+from pathlib import Path
 
 # === Configuration ===
 DATA_DIR = r'e:\毕设\Terra-main\model_train\cwt_images'
@@ -35,6 +38,46 @@ class FootstepDataset(Dataset):
             image = self.transform(image)
         return image, label
 
+
+def _predict(model, loader, device):
+    model.eval()
+    y_true = []
+    y_pred = []
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for images, labels in loader:
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+            y_true.extend(labels.detach().cpu().numpy().astype(int).tolist())
+            y_pred.extend(predicted.detach().cpu().numpy().astype(int).tolist())
+    acc = correct / total if total else 0.0
+    return y_true, y_pred, float(acc)
+
+
+def _save_confusion_matrix(y_true, y_pred, labels, out_path: Path):
+    cmx = confusion_matrix(y_true, y_pred, labels=labels)
+    denom = cmx.sum(axis=1, keepdims=True)
+    denom = (denom == 0) + denom
+    cmn = cmx.astype("float32") / denom.astype("float32")
+    plt.figure(figsize=(10, 8))
+    plt.imshow(cmn, interpolation="nearest", cmap="Blues")
+    plt.title("Confusion Matrix (Normalized)")
+    plt.colorbar(fraction=0.046, pad=0.04)
+    if len(labels) <= 30:
+        ticks = list(range(len(labels)))
+        tick_labels = [str(x) for x in labels]
+        plt.xticks(ticks, tick_labels, rotation=90, fontsize=6)
+        plt.yticks(ticks, tick_labels, fontsize=6)
+    plt.xlabel("Predicted")
+    plt.ylabel("True")
+    plt.tight_layout()
+    plt.savefig(str(out_path))
+    plt.close()
+
 def train_model():
     # 1. Prepare Data
     all_image_paths = []
@@ -53,6 +96,7 @@ def train_model():
     print(f"Total images found: {len(all_image_paths)}")
     print(f"Number of classes: {num_classes}")
     print(f"Device: {DEVICE}")
+    label_list = sorted(set(all_labels))
 
     # Split data
     train_paths, val_paths, train_labels, val_labels = train_test_split(
@@ -125,6 +169,33 @@ def train_model():
             torch.save(model.state_dict(), 'best_footstep_model.pth')
 
     print(f'Best Validation Accuracy: {best_acc:.4f}')
+
+    y_true_val, y_pred_val, val_acc_final = _predict(model, val_loader, DEVICE)
+    cm_path = Path("confusion_matrix_val.png")
+    _save_confusion_matrix(y_true_val, y_pred_val, label_list, cm_path)
+
+    metrics = {
+        "task": "train_cnn",
+        "device": str(DEVICE),
+        "data_dir": str(DATA_DIR),
+        "num_classes": int(num_classes),
+        "num_train_images": int(len(train_dataset)),
+        "num_val_images": int(len(val_dataset)),
+        "epochs": int(NUM_EPOCHS),
+        "batch_size": int(BATCH_SIZE),
+        "lr": float(LEARNING_RATE),
+        "use_pretrained": bool(USE_PRETRAINED),
+        "best_val_acc": float(best_acc),
+        "val_acc_final": float(val_acc_final),
+        "best_model_path": str(Path("best_footstep_model.pth").resolve()),
+        "training_history_path": str(Path("training_history.png").resolve()),
+        "confusion_matrix_val_path": str(cm_path.resolve()),
+    }
+    metrics_path = Path("metrics.json")
+    with metrics_path.open("w", encoding="utf-8") as f:
+        json.dump(metrics, f, ensure_ascii=False, indent=2)
+    print(f"Saved: {metrics_path}")
+    print(f"Saved: {cm_path}")
     
     # Plot results
     plt.figure(figsize=(12, 4))
@@ -135,6 +206,7 @@ def train_model():
     
     plt.subplot(1, 2, 2)
     plt.plot(history['val_acc'], label='Val Acc')
+    plt.axhline(val_acc_final, linestyle="--", linewidth=1.5, label=f"Val Acc: {val_acc_final:.4f}")
     plt.title('Validation Accuracy')
     plt.legend()
     plt.savefig('training_history.png')
