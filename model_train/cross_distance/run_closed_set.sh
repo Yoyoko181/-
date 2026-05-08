@@ -10,7 +10,7 @@ BATCH_SIZE="${BATCH_SIZE:-32}"
 LR="${LR:-1e-3}"
 SEED="${SEED:-42}"
 NUM_WORKERS="${NUM_WORKERS:-4}"
-EPOCHS="${EPOCHS:-200}"
+EPOCHS="${EPOCHS:-150}"
 USE_PRETRAINED="${USE_PRETRAINED:-0}"
 SKIP_GENERATE="${SKIP_GENERATE:-0}"
 
@@ -35,4 +35,3 @@ if [[ "$SKIP_GENERATE" == "1" ]]; then
 fi
 
 python3 "$SCRIPT_DIR/train_cross_distance.py" "${ARGS[@]}"
-
