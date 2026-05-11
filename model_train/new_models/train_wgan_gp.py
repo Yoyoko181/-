@@ -109,14 +109,19 @@ def main() -> None:
     num_classes = len(persons)
     if num_classes < 2:
         raise RuntimeError("num_classes < 2")
+    if int(x.size(0)) < 2:
+        raise RuntimeError("num_samples < 2")
 
     ds = TensorDataset1D(x, y)
+    bs = int(min(args.batch_size, int(x.size(0))))
+    if bs < 2:
+        raise RuntimeError("batch_size < 2 after adjustment")
     loader = DataLoader(
         ds,
-        batch_size=args.batch_size,
+        batch_size=bs,
         shuffle=True,
         num_workers=0,
-        drop_last=True,
+        drop_last=False,
         pin_memory=torch.cuda.is_available(),
     )
 

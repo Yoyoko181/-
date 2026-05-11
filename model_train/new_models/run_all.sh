@@ -35,9 +35,70 @@ ARCHIVE_ROOT="${ARCHIVE_ROOT:-$ROOT/model_train/results_archive/$TS}"
 mkdir -p "$ARCHIVE_ROOT"
 
 cd "$ROOT"
-git pull || true
+UPDATE_CODE="${UPDATE_CODE:-0}"
+if [ "$UPDATE_CODE" = "1" ]; then
+  git pull || true
+fi
 
 python3 -V
+
+mkdir -p "$ARCHIVE_ROOT/logs"
+
+fail_report() {
+  local code="$?"
+  echo "FAILED (exit=$code) at: ${CURRENT_STEP:-unknown}" >&2
+  if [ -n "${CURRENT_LOG:-}" ] && [ -f "${CURRENT_LOG:-}" ]; then
+    echo "Last 80 lines of log: $CURRENT_LOG" >&2
+    tail -n 80 "$CURRENT_LOG" >&2 || true
+  fi
+  echo "Archive: $ARCHIVE_ROOT" >&2
+  exit "$code"
+}
+trap fail_report ERR
+
+require_dir() {
+  local p="$1"
+  if [ ! -d "$p" ]; then
+    echo "Missing dir: $p" >&2
+    exit 2
+  fi
+}
+
+require_file() {
+  local p="$1"
+  if [ ! -f "$p" ]; then
+    echo "Missing file: $p" >&2
+    exit 2
+  fi
+}
+
+preflight_python() {
+  python3 -c "import torch; import scipy; import numpy; import matplotlib; print('torch', torch.__version__)" >/dev/null
+}
+
+preflight_data() {
+  require_dir "$ROOT/model_train"
+  require_dir "$INTERIM_ROOT"
+  require_dir "$CWT_ROOT"
+  if ! find "$INTERIM_ROOT/$DATASET_A3/A3_1" -maxdepth 1 -type f -name "P*.mat" | head -n 1 | grep -q .; then
+    echo "No P*.mat found under $INTERIM_ROOT/$DATASET_A3/A3_1" >&2
+    exit 2
+  fi
+  if ! find "$CWT_ROOT/$DATASET_A3/A3_1" -maxdepth 2 -type f \( -name "*.jpg" -o -name "*.png" \) | head -n 1 | grep -q .; then
+    echo "No images found under $CWT_ROOT/$DATASET_A3/A3_1" >&2
+    exit 2
+  fi
+}
+
+run_step() {
+  local name="$1"
+  shift
+  CURRENT_STEP="$name"
+  CURRENT_LOG="$ARCHIVE_ROOT/logs/$name.log"
+  echo "=== $name ==="
+  echo "LOG: $CURRENT_LOG"
+  "$@" 2>&1 | tee "$CURRENT_LOG"
+}
 
 run_and_archive_dir() {
   local src="$1"
@@ -49,10 +110,13 @@ run_and_archive_dir() {
   fi
 }
 
+preflight_python
+preflight_data
+
 mkdir -p "$ROOT/model_train/results"
 
 cd "$ROOT/model_train/cross_material"
-python3 train_cross_material.py \
+run_step baseline_cross_material python3 train_cross_material.py \
   --foot_db_root "$FOOT_DB_ROOT" \
   --cwt_out_root "$CWT_ROOT" \
   --dataset "$DATASET_A3" \
@@ -66,7 +130,7 @@ python3 train_cross_material.py \
 run_and_archive_dir "$ROOT/model_train/results/material" "$ARCHIVE_ROOT/baseline/material"
 
 cd "$ROOT/model_train/cross_distance"
-python3 train_cross_distance.py \
+run_step baseline_cross_distance python3 train_cross_distance.py \
   --foot_db_root "$FOOT_DB_ROOT" \
   --cwt_out_root "$CWT_ROOT" \
   --dataset "$DATASET_A2" \
@@ -80,7 +144,7 @@ python3 train_cross_distance.py \
 run_and_archive_dir "$ROOT/model_train/results/distance" "$ARCHIVE_ROOT/baseline/distance"
 
 cd "$ROOT/model_train/cross_speed"
-python3 train_cross_speed.py \
+run_step baseline_cross_speed_fast python3 train_cross_speed.py \
   --foot_db_root "$FOOT_DB_ROOT" \
   --cwt_out_root "$CWT_ROOT" \
   --dataset "$DATASET_A5" \
@@ -93,7 +157,7 @@ python3 train_cross_speed.py \
   --lr "$LR"
 run_and_archive_dir "$ROOT/model_train/results/speed" "$ARCHIVE_ROOT/baseline/speed_${TEST_SUBSET_A5_FAST}"
 
-python3 train_cross_speed.py \
+run_step baseline_cross_speed_slow python3 train_cross_speed.py \
   --foot_db_root "$FOOT_DB_ROOT" \
   --cwt_out_root "$CWT_ROOT" \
   --dataset "$DATASET_A5" \
@@ -109,7 +173,7 @@ run_and_archive_dir "$ROOT/model_train/results/speed" "$ARCHIVE_ROOT/baseline/sp
 cd "$ROOT/model_train/new_models"
 
 for v in base ms ms_se ms_se_lstm full; do
-  python3 train_classifier.py \
+  run_step "new_models_hybrid_${v}" python3 train_classifier.py \
     --interim_root "$INTERIM_ROOT" \
     --dataset "$DATASET_A3" \
     --train_subsets "$TRAIN_SUBSETS_A3" \
@@ -124,7 +188,7 @@ for v in base ms ms_se ms_se_lstm full; do
     --results_dir "$ARCHIVE_ROOT/new_models/hybrid_$v"
 done
 
-python3 train_classifier.py \
+run_step new_models_resnet1d_se python3 train_classifier.py \
   --interim_root "$INTERIM_ROOT" \
   --dataset "$DATASET_A3" \
   --train_subsets "$TRAIN_SUBSETS_A3" \
@@ -137,7 +201,7 @@ python3 train_classifier.py \
   --lr "$LR" \
   --results_dir "$ARCHIVE_ROOT/new_models/resnet1d_se"
 
-python3 train_classifier.py \
+run_step new_models_bilstm_attn python3 train_classifier.py \
   --interim_root "$INTERIM_ROOT" \
   --dataset "$DATASET_A3" \
   --train_subsets "$TRAIN_SUBSETS_A3" \
@@ -150,7 +214,7 @@ python3 train_classifier.py \
   --lr "$LR" \
   --results_dir "$ARCHIVE_ROOT/new_models/bilstm_attn"
 
-python3 train_wgan_gp.py \
+run_step wgan_gp_A3_1 python3 train_wgan_gp.py \
   --interim_root "$INTERIM_ROOT" \
   --dataset "$DATASET_A3" \
   --subset A3_1 \
@@ -158,7 +222,7 @@ python3 train_wgan_gp.py \
   --seed "$SEED" \
   --out_dir "$ARCHIVE_ROOT/wgan/wgan_gp_${DATASET_A3}_A3_1"
 
-python3 train_wgan_gp.py \
+run_step wgan_gp_A3_3 python3 train_wgan_gp.py \
   --interim_root "$INTERIM_ROOT" \
   --dataset "$DATASET_A3" \
   --subset A3_3 \
@@ -166,19 +230,19 @@ python3 train_wgan_gp.py \
   --seed "$SEED" \
   --out_dir "$ARCHIVE_ROOT/wgan/wgan_gp_${DATASET_A3}_A3_3"
 
-python3 generate_synthetic.py \
+run_step synth_A3_1 python3 generate_synthetic.py \
   --wgan_dir "$ARCHIVE_ROOT/wgan/wgan_gp_${DATASET_A3}_A3_1" \
   --out_path "$ARCHIVE_ROOT/wgan/syn_A3_1.pt" \
   --num_per_class "$SYN_PER_CLASS" \
   --seed "$SEED"
 
-python3 generate_synthetic.py \
+run_step synth_A3_3 python3 generate_synthetic.py \
   --wgan_dir "$ARCHIVE_ROOT/wgan/wgan_gp_${DATASET_A3}_A3_3" \
   --out_path "$ARCHIVE_ROOT/wgan/syn_A3_3.pt" \
   --num_per_class "$SYN_PER_CLASS" \
   --seed "$SEED"
 
-python3 train_classifier.py \
+run_step hybrid_full_syn_A3_1 python3 train_classifier.py \
   --interim_root "$INTERIM_ROOT" \
   --dataset "$DATASET_A3" \
   --train_subsets "$TRAIN_SUBSETS_A3" \
@@ -194,7 +258,7 @@ python3 train_classifier.py \
   --synthetic_ratio "$SYN_RATIO" \
   --results_dir "$ARCHIVE_ROOT/new_models/hybrid_full__syn_A3_1"
 
-python3 train_classifier.py \
+run_step hybrid_full_syn_A3_3 python3 train_classifier.py \
   --interim_root "$INTERIM_ROOT" \
   --dataset "$DATASET_A3" \
   --train_subsets "$TRAIN_SUBSETS_A3" \
@@ -211,4 +275,3 @@ python3 train_classifier.py \
   --results_dir "$ARCHIVE_ROOT/new_models/hybrid_full__syn_A3_3"
 
 echo "$ARCHIVE_ROOT"
-
