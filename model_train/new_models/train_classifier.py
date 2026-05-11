@@ -268,12 +268,15 @@ def main() -> None:
     if args.results_dir.strip():
         out_dir = args.results_dir
     else:
+        model_tag = args.model
+        if args.model == "hybrid":
+            model_tag = f"{args.model}_{args.hybrid_variant}"
         out_dir = os.path.join(
             os.path.dirname(__file__),
             "..",
             "results",
             "new_models",
-            f"{args.model}_{args.dataset}_{'-'.join(train_subsets)}__to__{'-'.join(test_subsets)}",
+            f"{model_tag}_{args.dataset}_{'-'.join(train_subsets)}__to__{'-'.join(test_subsets)}",
         )
     out_dir = os.path.abspath(out_dir)
     ensure_dir(out_dir)
